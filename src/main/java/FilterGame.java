@@ -61,7 +61,14 @@ public class FilterGame extends Configured implements Tool {
                 int round = root.get("round").asInt(0);
 
                 String deduplicationKey = dateKey + "_" + playerPair + "_" + round;
-                context.write(new Text(deduplicationKey), value);
+
+                // Création de la valeur en sortie (deck-gagnant_deck-perdant)
+                int winnerTag = root.get("winner").asInt(0);
+                String winnerDeck = winnerTag == 0 ? deck0 : deck1;
+                String loserDeck = winnerTag == 0 ? deck1 : deck0;
+                
+                String outputValue = winnerDeck + "-" + loserDeck;
+                context.write(new Text(deduplicationKey), new Text(outputValue));
 
             } catch (Exception e) {
                 // Erreur de parsing JSON
@@ -80,7 +87,6 @@ public class FilterGame extends Configured implements Tool {
                     context.write(NullWritable.get(), val);
                     firstSeen = true;
                 } else {
-                    // Toutes les valeurs suivantes pour cette clé sont des doublons
                     context.getCounter(GameCounters.DUPLICATE_GAMES).increment(1);
                 }
             }

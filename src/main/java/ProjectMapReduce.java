@@ -10,7 +10,8 @@ public class ProjectMapReduce {
 		int exitCode = -1;
 		try {
 			pgd.addClass("filter", FilterGame.class, "filter games");
-			// pgd.addClass("resume", bigdata.worldpop.ResumeCities.class, "Agregate cities according to their population");
+			pgd.addClass("stats", ArchetypeStatsJob.class, "compute deck popularity");
+			pgd.addClass("deckconfrontation", ListDeckConfrontation.class, "list deck confrontation");
 			exitCode = pgd.run(args);
 		} catch (Throwable e1)  {
 			e1.printStackTrace();
