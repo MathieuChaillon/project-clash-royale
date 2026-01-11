@@ -33,6 +33,12 @@ import org.apache.hadoop.yarn.webapp.hamlet.Hamlet.B;
 
 public class ArchetypeStatsJob extends Configured implements Tool {
 
+    public enum GameCounters {
+        UNKNOWN_ARCHETYPE,
+        NB_ARCHETYPES,
+        TOTAL_GAMES
+    }
+
     // Mapper : Lit "DeckA-DeckB", émet (DeckA, 1) et (DeckB, 1)
     public static class StatsMapper extends Mapper<LongWritable, Text, Text, Text> {
 
@@ -52,11 +58,14 @@ public class ArchetypeStatsJob extends Configured implements Tool {
                     // For each record in the user file
                     while ((line = rdr.readLine()) != null) {
                         String[] tokens = line.split(",");
-                        if (tokens.length >= 4) {
-                            String archetypeCodeValue = tokens[0];
-                            String archetype = tokens[1];
+                        if (tokens.length >= 2) {
+                            String archetypeCodeValue = tokens[1];
+                            String archetype = tokens[0];
                             archetypeCode.put(archetype, archetypeCodeValue);
                         }
+                    }
+                    for (String val : archetypeCode.values()) {
+                        context.getCounter(GameCounters.NB_ARCHETYPES).increment(1);
                     }
                     rdr.close();
                 }
@@ -84,33 +93,44 @@ public class ArchetypeStatsJob extends Configured implements Tool {
                 if (!archetype.equals("UNKNOWN")) {
                     wArchetypes.add(archetype);
                 }
+                else {
+                    context.getCounter(GameCounters.UNKNOWN_ARCHETYPE).increment(1);
+                }
             }
             for (String l : lSubs) {
                 String archetype = archetypeCode.getOrDefault(l, "UNKNOWN");
                 if (!archetype.equals("UNKNOWN")) {
                     lArchetypes.add(archetype);
                 }
+                else {
+                    context.getCounter(GameCounters.UNKNOWN_ARCHETYPE).increment(1);
+                }
             }
+            if (wArchetypes.isEmpty() || lArchetypes.isEmpty()) {
+                return;
+            }
+            context.getCounter(GameCounters.TOTAL_GAMES).increment(1);
             String winPrefix = "W:";
             String losePrefix = "L:";
             String allWinners = winPrefix + String.join(",", wArchetypes);
             String allLosers = losePrefix + String.join(",", lArchetypes);
 
+            
             // 2. Émettre pour les ARÊTES (Edges)
             for (String w : wArchetypes) {
-                context.write(new Text("E:" + w), new Text(allLosers));
+                context.write(new Text(EDGE_PREFIX + w), new Text(allLosers));
             }
             for (String l : lArchetypes) {
-                context.write(new Text("E:" + l), new Text(allWinners));
+                context.write(new Text(EDGE_PREFIX + l), new Text(allWinners));
             }
 
             // 3. Émettre pour les NOEUDS (Nodes) - Ça ne change pas ou peu
             // On peut optimiser en émettant juste "1" et en comptant au reduce
             for (String w : wArchetypes) {
-                context.write(new Text("N:" + w), new Text("1,1")); // 1 match, 1 victoire
+                context.write(new Text(NODE_PREFIX + w), new Text("1,1")); // 1 match, 1 victoire
             }
             for (String l : lArchetypes) {
-                context.write(new Text("N:" + l), new Text("1,0")); // 1 match, 0 victoire
+                context.write(new Text(NODE_PREFIX + l), new Text("1,0")); // 1 match, 0 victoire
             }
         }
 
@@ -194,15 +214,15 @@ public class ArchetypeStatsJob extends Configured implements Tool {
                 Map<String, Integer> targetWins = new HashMap<>();
 
                 for (Text val : values) {
-                    String[] opposite = val.toString().split(",");
+                    String[] opposite = val.toString().split(":");
                     String prefix = opposite[0];
                     String[] targets = opposite[1].split(",");
-                    if (prefix.equals("W:")) {
+                    if (prefix.equals("W")) {
                         // Decks which won against sourceDeck
                         for (String target : targets) {
                             targetCounts.put(target, targetCounts.getOrDefault(target, 0) + 1);
                         }
-                    } else if (prefix.equals("L:")) {
+                    } else if (prefix.equals("L")) {
                         // Decks which lost against sourceDeck
                         for (String target : targets) {
                             targetWins.put(target, targetWins.getOrDefault(target, 0) + 1);
