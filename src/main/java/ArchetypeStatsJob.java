@@ -92,8 +92,7 @@ public class ArchetypeStatsJob extends Configured implements Tool {
                 String archetype = archetypeCode.getOrDefault(w, "UNKNOWN");
                 if (!archetype.equals("UNKNOWN")) {
                     wArchetypes.add(archetype);
-                }
-                else {
+                } else {
                     context.getCounter(GameCounters.UNKNOWN_ARCHETYPE).increment(1);
                 }
             }
@@ -101,8 +100,7 @@ public class ArchetypeStatsJob extends Configured implements Tool {
                 String archetype = archetypeCode.getOrDefault(l, "UNKNOWN");
                 if (!archetype.equals("UNKNOWN")) {
                     lArchetypes.add(archetype);
-                }
-                else {
+                } else {
                     context.getCounter(GameCounters.UNKNOWN_ARCHETYPE).increment(1);
                 }
             }
@@ -115,7 +113,6 @@ public class ArchetypeStatsJob extends Configured implements Tool {
             String allWinners = winPrefix + String.join(",", wArchetypes);
             String allLosers = losePrefix + String.join(",", lArchetypes);
 
-            
             // 2. Émettre pour les ARÊTES (Edges)
             for (String w : wArchetypes) {
                 context.write(new Text(EDGE_PREFIX + w), new Text(allLosers));
@@ -182,13 +179,10 @@ public class ArchetypeStatsJob extends Configured implements Tool {
     // Reducer : Somme les occurrences, filtre et formate
     public static class StatsReducer extends Reducer<Text, Text, NullWritable, Text> {
         private MultipleOutputs<NullWritable, Text> mos;
-        private int minThreshold = 0;
 
         @Override
         protected void setup(Context context) {
             mos = new MultipleOutputs<NullWritable, Text>(context);
-            Configuration conf = context.getConfiguration();
-            this.minThreshold = conf.getInt("filter.threshold", 10000);
         }
 
         @Override
@@ -234,11 +228,10 @@ public class ArchetypeStatsJob extends Configured implements Tool {
                 // Écriture des résultats filtrés
                 for (String target : targetCounts.keySet()) {
                     int totalMatches = targetCounts.get(target);
-                    if (totalMatches >= minThreshold) {
-                        int totalWins = targetWins.getOrDefault(target, 0);
-                        mos.write("edges", NullWritable.get(),
-                                new Text(sourceDeck + ";" + target + ";" + totalMatches + ";" + totalWins));
-                    }
+                    int totalWins = targetWins.getOrDefault(target, 0);
+                    mos.write("edges", NullWritable.get(),
+                            new Text(sourceDeck + ";" + target + ";" + totalMatches + ";" + totalWins));
+
                 }
             }
         }
@@ -251,13 +244,12 @@ public class ArchetypeStatsJob extends Configured implements Tool {
 
     @Override
     public int run(String[] args) throws Exception {
-        if (args.length < 4) {
-            System.err.println("Usage: DeckPopularity <input path> <output path> <min_threshold>");
+        if (args.length < 3) {
+            System.err.println("Usage: DeckPopularity <input path> <output path> <archetype file>");
             return -1;
         }
 
         Configuration conf = getConf();
-        conf.setInt("filter.threshold", Integer.parseInt(args[3]));
 
         Job job = Job.getInstance(conf, "Clash Royale Deck Popularity");
         job.addCacheFile(new URI(args[2]));

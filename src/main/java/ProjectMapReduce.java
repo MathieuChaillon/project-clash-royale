@@ -13,6 +13,10 @@ public class ProjectMapReduce {
 			pgd.addClass("archetypecode", DeckToArchetypeCode.class, "compute deck popularity");
 			pgd.addClass("archetypestats", ArchetypeStatsJob.class, "compute archetype statistics");
 			pgd.addClass("globalstats", GlobalStatsJob.class, "compute global statistics");
+
+			pgd.addClass("deckcode", DeckToDeckCode.class, "compute deck code");
+			pgd.addClass("deckstats", DeckStatsJob.class, "compute deck statistics");
+			pgd.addClass("deckglobalstats", DeckGlobalStatsJob.class, "compute deck global statistics");
 			exitCode = pgd.run(args);
 		} catch (Throwable e1)  {
 			e1.printStackTrace();

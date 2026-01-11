@@ -26,10 +26,10 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.hadoop.yarn.webapp.hamlet.Hamlet.B;
 
-public class DeckToArchetypeCode extends Configured implements Tool {
+public class DeckToDeckCode extends Configured implements Tool {
 
     // Mapper : Lit "DeckA-DeckB", émet (DeckA, 1) et (DeckB, 1)
-    public static class DeckToArchetypeCodeMapper extends Mapper<LongWritable, Text, Text, NullWritable> {
+    public static class DeckToDeckCodeMapper extends Mapper<LongWritable, Text, Text, NullWritable> {
 
         @Override
         public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
@@ -41,65 +41,14 @@ public class DeckToArchetypeCode extends Configured implements Tool {
                 return;
             }
 
-            // Generate 28 subdecks for each deck
-            List<String> wSubs = generateSubDecks(decks[0]);
-            List<String> lSubs = generateSubDecks(decks[1]);
-
-            for (String w : wSubs) {
-                context.write(new Text(w), NullWritable.get());
-            }
-            for (String l : lSubs) {
-                context.write(new Text(l), NullWritable.get());
-            }
+            context.write(new Text(decks[0]), NullWritable.get());
+            context.write(new Text(decks[1]), NullWritable.get());
         }
 
-        private List<String> generateSubDecks(String fullDeck) {
-            List<String> subDecks = new ArrayList<>(70);
-            List<String> cards = new ArrayList<>(8);
-
-            // Sécurité de base
-            if (fullDeck == null || fullDeck.length() != 16) {
-                return subDecks;
-            }
-
-            for (int i = 0; i < 16; i += 2) {
-                cards.add(fullDeck.substring(i, i + 2));
-            }
-
-            Collections.sort(cards);
-
-            int n = cards.size();
-
-            String cardi, cardj, cardk, cardl, cardm, cardo;
-
-            for (int i = 0; i < n - 5; i++) {
-                for (int j = i + 1; j < n - 4; j++) {
-                    for (int k = j + 1; k < n - 3; k++) {
-                        for (int l = k + 1; l < n - 2; l++) {
-                            for (int m = l + 1; m < n - 1; m++) {
-                                for (int o = m + 1; o < n; o++) {
-
-                                    cardi = cards.get(i);
-                                    cardj = cards.get(j);
-                                    cardk = cards.get(k);
-                                    cardl = cards.get(l);
-                                    cardm = cards.get(m);
-                                    cardo = cards.get(o);
-                                    subDecks.add(cardi + cardj + cardk + cardl + cardm + cardo);
-                                }
-                            }
-                        }
-                    }
-                }
-
-            }
-            return subDecks;
-
-        }
     }
 
     // Reducer : Somme les occurrences, filtre et formate
-    public static class DeckToArchetypeCodeReducer extends Reducer<Text, NullWritable, NullWritable, Text> {
+    public static class DeckToDeckCodeReducer extends Reducer<Text, NullWritable, NullWritable, Text> {
         private int minThreshold = 0;
         private int index = 0;
 
@@ -137,10 +86,10 @@ public class DeckToArchetypeCode extends Configured implements Tool {
         conf.setInt("filter.threshold", Integer.parseInt(args[2]));
 
         Job job = Job.getInstance(conf, "Clash Royale Deck Popularity");
-        job.setJarByClass(ArchetypeStatsJob.class);
+        job.setJarByClass(DeckToDeckCode.class);
 
-        job.setMapperClass(DeckToArchetypeCodeMapper.class);
-        job.setReducerClass(DeckToArchetypeCodeReducer.class);
+        job.setMapperClass(DeckToDeckCodeMapper.class);
+        job.setReducerClass(DeckToDeckCodeReducer.class);
 
         // --- FIX START ---
         // Explicitly define Mapper output types because they differ from Reducer output
@@ -161,7 +110,7 @@ public class DeckToArchetypeCode extends Configured implements Tool {
     }
 
     public static void main(String[] args) throws Exception {
-        int res = ToolRunner.run(new Configuration(), new DeckToArchetypeCode(), args);
+        int res = ToolRunner.run(new Configuration(), new DeckToDeckCode(), args);
         System.exit(res);
     }
 

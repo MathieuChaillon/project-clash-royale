@@ -32,17 +32,16 @@ import org.apache.hadoop.util.ToolRunner;
 import org.apache.hadoop.yarn.webapp.hamlet.Hamlet.B;
 import org.apache.hadoop.yarn.webapp.hamlet.Hamlet.I;
 
-public class GlobalStatsJob extends Configured implements Tool {
+public class DeckGlobalStatsJob extends Configured implements Tool {
 
     public enum GameCounters {
-        NB_ARCHETYPE
+        NB_DECK
     }
 
-    public static class GlobalStatsMapper extends Mapper<LongWritable, Text, Text, NullWritable> {
+    public static class DeckGlobalStatsMapper extends Mapper<LongWritable, Text, Text, NullWritable> {
 
-        private HashMap<String, Integer> archetypeOccurences = new HashMap<>();
-        private int nbArchetype = 0;
-        private int nbGames = 0;
+        private HashMap<String, Integer> deckOccurences = new HashMap<>();
+        private int nbDeck = 0;
 
         @Override
         public void setup(Context context) throws IOException, InterruptedException {
@@ -58,17 +57,16 @@ public class GlobalStatsJob extends Configured implements Tool {
                     while ((line = rdr.readLine()) != null) {
                         String[] tokens = line.split(";");
                         if (tokens.length >= 3) {
-                            String archetype = tokens[0];
-                            Integer archetypeOccurence = Integer.parseInt(tokens[1]);
-                            nbArchetype += archetypeOccurence;
-                            archetypeOccurences.put(archetype, archetypeOccurence);
+                            String deck = tokens[0];
+                            Integer deckOccurence = Integer.parseInt(tokens[1]);
+                            nbDeck += deckOccurence;
+                            deckOccurences.put(deck, deckOccurence);
                         }
                     }
                     rdr.close();
                 }
             }
-            nbGames = nbArchetype / 28; // Each game involves 2 archetypes, each archetype appears in 28 subdecks
-            context.getCounter(GameCounters.NB_ARCHETYPE).increment(nbArchetype);
+            context.getCounter(GameCounters.NB_DECK).increment(nbDeck);
 
         }
 
@@ -87,12 +85,11 @@ public class GlobalStatsJob extends Configured implements Tool {
             int totalWins = Integer.parseInt(data[3]);
 
             // Recuperate occurences of the 2 archetypes
-            int occurence1 = archetypeOccurences.getOrDefault(archetype1, 0);
-            int occurence2 = archetypeOccurences.getOrDefault(archetype2, 0);
+            int occurence1 = deckOccurences.getOrDefault(archetype1, 0);
+            int occurence2 = deckOccurences.getOrDefault(archetype2, 0);
 
             // Calculate
-            double stat = (double) occurence1 * occurence2 / (double) (nbGames);
-
+            double stat = (double) occurence1 * occurence2 / (double) (nbDeck);
             // Get stat with only 2 decimals
             stat = Math.round(stat * 100.0) / 100.0;
 
@@ -103,7 +100,7 @@ public class GlobalStatsJob extends Configured implements Tool {
     }
 
     // Reducer : Somme les occurrences, filtre et formate
-    public static class GlobalStatsReducer extends Reducer<Text, NullWritable, NullWritable, Text> {
+    public static class DeckGlobalStatsReducer extends Reducer<Text, NullWritable, NullWritable, Text> {
         @Override
         protected void reduce(Text key, Iterable<NullWritable> values, Context context)
                 throws IOException, InterruptedException {
@@ -124,10 +121,10 @@ public class GlobalStatsJob extends Configured implements Tool {
         Job job = Job.getInstance(conf, "Clash Royale Deck Popularity");
         job.addCacheFile(new URI(args[2]));
 
-        job.setJarByClass(GlobalStatsJob.class);
+        job.setJarByClass(DeckGlobalStatsJob.class);
 
-        job.setMapperClass(GlobalStatsMapper.class);
-        job.setReducerClass(GlobalStatsReducer.class);
+        job.setMapperClass(DeckGlobalStatsMapper.class);
+        job.setReducerClass(DeckGlobalStatsReducer.class);
 
         // --- FIX START ---
         // Explicitly define Mapper output types because they differ from Reducer output
@@ -147,7 +144,7 @@ public class GlobalStatsJob extends Configured implements Tool {
     }
 
     public static void main(String[] args) throws Exception {
-        int res = ToolRunner.run(new Configuration(), new GlobalStatsJob(), args);
+        int res = ToolRunner.run(new Configuration(), new DeckGlobalStatsJob(), args);
         System.exit(res);
     }
 }
