@@ -12,6 +12,7 @@ public class ProjectMapReduce {
 			pgd.addClass("filter", FilterGame.class, "filter games");
 			pgd.addClass("archetypecode", DeckToArchetypeCode.class, "compute deck popularity");
 			pgd.addClass("archetypestats", ArchetypeStatsJob.class, "compute archetype statistics");
+			pgd.addClass("globalstats", GlobalStatsJob.class, "compute global statistics");
 			exitCode = pgd.run(args);
 		} catch (Throwable e1)  {
 			e1.printStackTrace();
