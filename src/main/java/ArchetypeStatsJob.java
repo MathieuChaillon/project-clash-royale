@@ -1,4 +1,9 @@
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,6 +38,30 @@ public class ArchetypeStatsJob extends Configured implements Tool {
 
         private static final String NODE_PREFIX = "N:";
         private static final String EDGE_PREFIX = "E:";
+        private HashMap<String, String> archetypeCode = new HashMap<>();
+
+        public void setup(Context context) throws IOException, InterruptedException {
+            URI[] files = context.getCacheFiles(); // Récupère les URIs HDFS
+
+            if (files != null && files.length > 0) {
+                for (URI p : files) {
+                    File f = new File("./" + new File(p.getPath()).getName());
+                    BufferedReader rdr = new BufferedReader(
+                            new InputStreamReader(new FileInputStream(f)));
+                    String line = null;
+                    // For each record in the user file
+                    while ((line = rdr.readLine()) != null) {
+                        String[] tokens = line.split(",");
+                        if (tokens.length >= 4) {
+                            String archetypeCodeValue = tokens[0];
+                            String archetype = tokens[1];
+                            archetypeCode.put(archetype, archetypeCodeValue);
+                        }
+                    }
+                    rdr.close();
+                }
+            }
+        }
 
         @Override
         public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
@@ -44,29 +73,43 @@ public class ArchetypeStatsJob extends Configured implements Tool {
                 return;
             }
 
-            // Generate 70 subdecks for each deck
+            // Generate 28 subdecks for each deck
             List<String> wSubs = generateSubDecks(decks[0]);
             List<String> lSubs = generateSubDecks(decks[1]);
 
-            String winPrefix = "W:";
-            String losePrefix = "L:";
-            String allWinners = winPrefix + String.join(",", wSubs);
-            String allLosers = losePrefix + String.join(",", lSubs);
-
-            // 2. Émettre pour les ARÊTES (Edges)
+            List<String> wArchetypes = new ArrayList<>();
+            List<String> lArchetypes = new ArrayList<>();
             for (String w : wSubs) {
-                context.write(new Text("E:" + w), new Text(allLosers));
+                String archetype = archetypeCode.getOrDefault(w, "UNKNOWN");
+                if (!archetype.equals("UNKNOWN")) {
+                    wArchetypes.add(archetype);
+                }
             }
             for (String l : lSubs) {
+                String archetype = archetypeCode.getOrDefault(l, "UNKNOWN");
+                if (!archetype.equals("UNKNOWN")) {
+                    lArchetypes.add(archetype);
+                }
+            }
+            String winPrefix = "W:";
+            String losePrefix = "L:";
+            String allWinners = winPrefix + String.join(",", wArchetypes);
+            String allLosers = losePrefix + String.join(",", lArchetypes);
+
+            // 2. Émettre pour les ARÊTES (Edges)
+            for (String w : wArchetypes) {
+                context.write(new Text("E:" + w), new Text(allLosers));
+            }
+            for (String l : lArchetypes) {
                 context.write(new Text("E:" + l), new Text(allWinners));
             }
 
             // 3. Émettre pour les NOEUDS (Nodes) - Ça ne change pas ou peu
             // On peut optimiser en émettant juste "1" et en comptant au reduce
-            for (String w : wSubs) {
+            for (String w : wArchetypes) {
                 context.write(new Text("N:" + w), new Text("1,1")); // 1 match, 1 victoire
             }
-            for (String l : lSubs) {
+            for (String l : lArchetypes) {
                 context.write(new Text("N:" + l), new Text("1,0")); // 1 match, 0 victoire
             }
         }
@@ -88,21 +131,28 @@ public class ArchetypeStatsJob extends Configured implements Tool {
 
             int n = cards.size();
 
-            String cardi, cardj, cardk, cardl;
+            String cardi, cardj, cardk, cardl, cardm, cardo;
 
-            for (int i = 0; i < n - 3; i++) {
-                for (int j = i + 1; j < n - 2; j++) {
-                    for (int k = j + 1; k < n - 1; k++) {
-                        for (int l = k + 1; l < n; l++) {
+            for (int i = 0; i < n - 5; i++) {
+                for (int j = i + 1; j < n - 4; j++) {
+                    for (int k = j + 1; k < n - 3; k++) {
+                        for (int l = k + 1; l < n - 2; l++) {
+                            for (int m = l + 1; m < n - 1; m++) {
+                                for (int o = m + 1; o < n; o++) {
 
-                            cardi = cards.get(i);
-                            cardj = cards.get(j);
-                            cardk = cards.get(k);
-                            cardl = cards.get(l);
-                            subDecks.add(cardi + cardj + cardk + cardl);
+                                    cardi = cards.get(i);
+                                    cardj = cards.get(j);
+                                    cardk = cards.get(k);
+                                    cardl = cards.get(l);
+                                    cardm = cards.get(m);
+                                    cardo = cards.get(o);
+                                    subDecks.add(cardi + cardj + cardk + cardl + cardm + cardo);
+                                }
+                            }
                         }
                     }
                 }
+
             }
 
             return subDecks;
@@ -181,15 +231,17 @@ public class ArchetypeStatsJob extends Configured implements Tool {
 
     @Override
     public int run(String[] args) throws Exception {
-        if (args.length < 3) {
+        if (args.length < 4) {
             System.err.println("Usage: DeckPopularity <input path> <output path> <min_threshold>");
             return -1;
         }
 
         Configuration conf = getConf();
-        conf.setInt("filter.threshold", Integer.parseInt(args[2]));
+        conf.setInt("filter.threshold", Integer.parseInt(args[3]));
 
         Job job = Job.getInstance(conf, "Clash Royale Deck Popularity");
+        job.addCacheFile(new URI(args[2]));
+
         job.setJarByClass(ArchetypeStatsJob.class);
 
         job.setMapperClass(StatsMapper.class);
