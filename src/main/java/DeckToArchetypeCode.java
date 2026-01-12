@@ -28,12 +28,12 @@ import org.apache.hadoop.yarn.webapp.hamlet.Hamlet.B;
 
 public class DeckToArchetypeCode extends Configured implements Tool {
 
-    // Mapper : Lit "DeckA-DeckB", émet (DeckA, 1) et (DeckB, 1)
+    // Mapper : Read deck file, generate subdecks, emit each subdeck
     public static class DeckToArchetypeCodeMapper extends Mapper<LongWritable, Text, Text, NullWritable> {
 
         @Override
         public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-            // On s'attend à une entrée formatée : "deckA-deckB"
+            // Expecting input formatted as: "WIN_DECK-LOSE_DECK"
             String line = value.toString();
             String[] decks = line.split("-");
 
@@ -41,10 +41,11 @@ public class DeckToArchetypeCode extends Configured implements Tool {
                 return;
             }
 
-            // Generate 28 subdecks for each deck
+            // Generate 28 subdecks (6-card combinations) for each deck
             List<String> wSubs = generateSubDecks(decks[0]);
             List<String> lSubs = generateSubDecks(decks[1]);
 
+            // Emit each subdeck from both decks
             for (String w : wSubs) {
                 context.write(new Text(w), NullWritable.get());
             }
@@ -53,25 +54,29 @@ public class DeckToArchetypeCode extends Configured implements Tool {
             }
         }
 
+        // Generate all 6-card combinations (subdecks) from a full 8-card deck
         private List<String> generateSubDecks(String fullDeck) {
             List<String> subDecks = new ArrayList<>(70);
             List<String> cards = new ArrayList<>(8);
 
-            // Sécurité de base
+            // Security check
             if (fullDeck == null || fullDeck.length() != 16) {
                 return subDecks;
             }
 
+            // Extract cards
             for (int i = 0; i < 16; i += 2) {
                 cards.add(fullDeck.substring(i, i + 2));
             }
 
+            // Sort cards to ensure consistent combinations
             Collections.sort(cards);
 
             int n = cards.size();
 
             String cardi, cardj, cardk, cardl, cardm, cardo;
 
+            // Generate all 6-card combinations from 8 cards
             for (int i = 0; i < n - 5; i++) {
                 for (int j = i + 1; j < n - 4; j++) {
                     for (int k = j + 1; k < n - 3; k++) {
@@ -98,15 +103,12 @@ public class DeckToArchetypeCode extends Configured implements Tool {
         }
     }
 
-    // Reducer : Somme les occurrences, filtre et formate
+    // Reducer : Aggregate node and edge statistics
     public static class DeckToArchetypeCodeReducer extends Reducer<Text, NullWritable, NullWritable, Text> {
-        private int minThreshold = 0;
         private int index = 0;
 
         @Override
         protected void setup(Context context) {
-            Configuration conf = context.getConfiguration();
-            this.minThreshold = conf.getInt("filter.threshold", 10000);
             this.index = 0;
         }
 
@@ -118,26 +120,24 @@ public class DeckToArchetypeCode extends Configured implements Tool {
             for (NullWritable val : values) {
                 count++;
             }
-            if (count >= minThreshold) {
-                index++;
-                String output = String.format("%s,%04d", key.toString(), index);
-                context.write(NullWritable.get(), new Text(output));
-            }
+            index++;
+            String output = String.format("%s,%04d", key.toString(), index);
+            context.write(NullWritable.get(), new Text(output));
+
         }
     }
 
     @Override
     public int run(String[] args) throws Exception {
-        if (args.length < 3) {
-            System.err.println("Usage: DeckPopularity <input path> <output path> <min_threshold>");
+        if (args.length < 2) {
+            System.err.println("Usage:  <input path> <output path>");
             return -1;
         }
 
         Configuration conf = getConf();
-        conf.setInt("filter.threshold", Integer.parseInt(args[2]));
 
         Job job = Job.getInstance(conf, "Clash Royale Deck Popularity");
-        job.setJarByClass(ArchetypeStatsJob.class);
+        job.setJarByClass(DeckToArchetypeCode.class);
 
         job.setMapperClass(DeckToArchetypeCodeMapper.class);
         job.setReducerClass(DeckToArchetypeCodeReducer.class);
